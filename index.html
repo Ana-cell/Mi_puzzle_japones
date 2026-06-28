@@ -102,4 +102,128 @@ const PUZZLES = [
 
 function calcHints(line) {
   const h=[]; let c=0;
-  for(const v of line){if(v)c++;else if(c){h.push(c
+  for(const v of line){if(v)c++;else if(c){h.push(c);c=0;}}
+  if(c)h.push(c);
+  return h.length?h:[0];
+}
+const rowHints=g=>g.map(r=>calcHints(r));
+const colHints=g=>Array.from({length:g[0].length},(_,c)=>calcHints(g.map(r=>r[c])));
+
+let currentIdx=0,mode='filled',userGrid=[],activeFilter='todos';
+let visiblePuzzles=[...PUZZLES.keys()];
+
+function loadPuzzle(idx){
+  currentIdx=idx;
+  const p=PUZZLES[idx];
+  const ROWS=p.grid.length,COLS=p.grid[0].length;
+  const CELL=Math.min(42,Math.floor((Math.min(window.innerWidth,480)-120)/COLS));
+  userGrid=Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  const diffLabel={facil:'Fácil',medio:'Medio',dificil:'Difícil'}[p.diff];
+  document.getElementById('puzzle-name').innerHTML=`${p.name} <span class="diff-badge badge-${p.diff}">${diffLabel} · ${COLS}×${ROWS}</span>`;
+  document.getElementById('message').textContent='';
+  document.getElementById('message').className='';
+  const rh=rowHints(p.grid),ch=colHints(p.grid);
+  const maxRow=Math.max(...rh.map(h=>h.length));
+  const maxCol=Math.max(...ch.map(h=>h.length));
+  const hintW=maxRow*17+8,hintH=maxCol*15+6;
+  const wrapper=document.getElementById('gameWrapper');
+  wrapper.innerHTML='';
+  wrapper.style.gridTemplateColumns=`${hintW}px repeat(${COLS},${CELL}px)`;
+  wrapper.style.gridTemplateRows=`${hintH}px repeat(${ROWS},${CELL}px)`;
+  wrapper.appendChild(document.createElement('div'));
+  for(let c=0;c<COLS;c++){
+    const d=document.createElement('div');
+    d.className='col-hint-cell';
+    d.style.cssText=`width:${CELL}px;height:${hintH}px`;
+    ch[c].forEach(n=>{const s=document.createElement('span');s.textContent=n;d.appendChild(s);});
+    wrapper.appendChild(d);
+  }
+  for(let r=0;r<ROWS;r++){
+    const rc=document.createElement('div');
+    rc.className='row-hint-cell';
+    rc.style.height=CELL+'px';
+    rh[r].forEach(n=>{const s=document.createElement('span');s.textContent=n;rc.appendChild(s);});
+    wrapper.appendChild(rc);
+    for(let c=0;c<COLS;c++){
+      const cell=document.createElement('div');
+      cell.className='cell';
+      cell.style.cssText=`width:${CELL}px;height:${CELL}px`;
+      if((c+1)%5===0&&c+1<COLS)cell.classList.add('br5');
+      if((r+1)%5===0&&r+1<ROWS)cell.classList.add('bb5');
+      cell.dataset.r=r;cell.dataset.c=c;
+      cell.addEventListener('click',()=>toggle(r,c,cell));
+      cell.addEventListener('contextmenu',e=>{e.preventDefault();toggleX(r,c,cell);});
+      wrapper.appendChild(cell);
+    }
+  }
+  updatePuzzleButtons();
+}
+
+function toggle(r,c,cell){
+  if(mode==='filled'){
+    userGrid[r][c]=userGrid[r][c]==='filled'?null:'filled';
+    cell.className='cell'+(userGrid[r][c]?' filled':'');
+  } else toggleX(r,c,cell);
+}
+function toggleX(r,c,cell){
+  userGrid[r][c]=userGrid[r][c]==='xmark'?null:'xmark';
+  cell.className='cell'+(userGrid[r][c]?' xmark':'');
+}
+function checkSolution(){
+  const sol=PUZZLES[currentIdx].grid;
+  let ok=true;
+  document.querySelectorAll('.cell').forEach(cell=>{
+    const r=+cell.dataset.r,c=+cell.dataset.c;
+    const exp=sol[r][c]===1,got=userGrid[r][c]==='filled';
+    if(exp&&got)cell.className='cell correct';
+    else if(!exp&&!got)cell.className=userGrid[r][c]==='xmark'?'cell xmark':'cell';
+    else{cell.className='cell wrong';ok=false;}
+  });
+  const msg=document.getElementById('message');
+  msg.textContent=ok?'🎉 ¡Correcto! Puzzle resuelto.':'❌ Hay errores. Las celdas en rojo no están bien.';
+  msg.className=ok?'win':'fail';
+}
+function resetGrid(){
+  const p=PUZZLES[currentIdx];
+  userGrid=Array.from({length:p.grid.length},()=>Array(p.grid[0].length).fill(null));
+  document.querySelectorAll('.cell').forEach(c=>c.className='cell');
+  document.getElementById('message').textContent='';
+  document.getElementById('message').className='';
+}
+function setFilter(diff){
+  activeFilter=diff;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.diff===diff));
+  visiblePuzzles=PUZZLES.map((p,i)=>({p,i})).filter(({p})=>diff==='todos'||p.diff===diff).map(({i})=>i);
+  buildPuzzleSelector();
+  if(!visiblePuzzles.includes(currentIdx))loadPuzzle(visiblePuzzles[0]);
+}
+function buildPuzzleSelector(){
+  const container=document.getElementById('puzzle-selector');
+  container.innerHTML='';
+  visiblePuzzles.forEach(i=>{
+    const btn=document.createElement('button');
+    btn.className='puzzle-btn';
+    btn.textContent=PUZZLES[i].name;
+    btn.dataset.idx=i;
+    btn.addEventListener('click',()=>loadPuzzle(i));
+    container.appendChild(btn);
+  });
+  updatePuzzleButtons();
+}
+function updatePuzzleButtons(){
+  document.querySelectorAll('.puzzle-btn').forEach(btn=>btn.classList.toggle('active',+btn.dataset.idx===currentIdx));
+}
+document.getElementById('modeBtn').addEventListener('click',()=>{
+  mode=mode==='filled'?'xmark':'filled';
+  const btn=document.getElementById('modeBtn');
+  btn.textContent=mode==='filled'?'⬛ Pintar':'✕ Marcar X';
+  btn.classList.toggle('xmode',mode==='xmark');
+});
+document.getElementById('checkBtn').addEventListener('click',checkSolution);
+document.getElementById('resetBtn').addEventListener('click',resetGrid);
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setFilter(t.dataset.diff)));
+buildPuzzleSelector();
+loadPuzzle(0);
+</script>
+</body>
+</html>

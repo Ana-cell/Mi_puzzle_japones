@@ -14,9 +14,18 @@
     .badge-medio   { background: #6c5ce7; color: #fff; }
     .badge-dificil { background: #d63031; color: #fff; }
 
+    /* Pestañas de dificultad */
+    .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+    .tab { padding: 6px 16px; border-radius: 20px; border: 1px solid #4a4580; background: #2d2b55; color: #bbb; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+    .tab.active { color: #fff; }
+    .tab[data-diff="todos"].active   { background: #4a4580; border-color: #a29bfe; }
+    .tab[data-diff="facil"].active   { background: #00b894; border-color: #00b894; }
+    .tab[data-diff="medio"].active   { background: #6c5ce7; border-color: #a29bfe; }
+    .tab[data-diff="dificil"].active { background: #d63031; border-color: #ff7675; }
+
     /* Navegación compacta */
     .nav-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-    .nav-row select { background: #2d2b55; border: 1px solid #4a4580; color: #ccc; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; max-width: 160px; }
+    .nav-row select { background: #2d2b55; border: 1px solid #4a4580; color: #ccc; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; max-width: 180px; }
     .nav-btn { background: #2d2b55; border: 1px solid #4a4580; color: #ccc; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
     .nav-btn:hover { background: #3d3a70; color: #fff; }
 
@@ -54,6 +63,13 @@
 <body>
 <h1>NONOGRAMAS</h1>
 <div id="puzzle-name">— — —</div>
+
+<div class="tabs">
+  <button class="tab active" data-diff="todos">Todos</button>
+  <button class="tab" data-diff="facil">Fácil</button>
+  <button class="tab" data-diff="medio">Medio</button>
+  <button class="tab" data-diff="dificil">Difícil</button>
+</div>
 
 <div class="nav-row">
   <button class="nav-btn" id="prevBtn">◀</button>
@@ -116,20 +132,30 @@ const rowHints=g=>g.map(r=>calcHints(r));
 const colHints=g=>Array.from({length:g[0].length},(_,c)=>calcHints(g.map(r=>r[c])));
 
 let currentIdx=0, mode='filled', userGrid=[], hintShown=false;
+let activeDiff='todos';
+let visibleIndices=[...PUZZLES.keys()];
+
+// ── Pestañas de dificultad ──────────────────────────────────
+function setDiff(diff){
+  activeDiff=diff;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.diff===diff));
+  visibleIndices = PUZZLES.map((p,i)=>({p,i})).filter(({p})=>diff==='todos'||p.diff===diff).map(({i})=>i);
+  buildSelect();
+  loadPuzzle(visibleIndices[0]);
+}
 
 // ── Desplegable ──────────────────────────────────────────────
 function buildSelect(){
   const sel=document.getElementById('puzzleSelect');
   sel.innerHTML='';
-  PUZZLES.forEach((p,i)=>{
+  visibleIndices.forEach((i,n)=>{
+    const p=PUZZLES[i];
     const opt=document.createElement('option');
     opt.value=i;
     const d={facil:'F',medio:'M',dificil:'D'}[p.diff];
-    opt.textContent=`[${d}] Puzzle #${i+1}`;
+    opt.textContent = activeDiff==='todos' ? `[${d}] Puzzle #${n+1}` : `Puzzle #${n+1}`;
     sel.appendChild(opt);
   });
-  sel.value=currentIdx;
-  sel.onchange=()=>loadPuzzle(+sel.value);
 }
 
 // ── Arrastre táctil ──────────────────────────────────────────
@@ -266,7 +292,8 @@ function checkSolution(){
     const p=PUZZLES[currentIdx];
     document.getElementById('puzzle-name').innerHTML=
       `${p.name} ✓ <span class="diff-badge badge-${p.diff}">${{facil:'Fácil',medio:'Medio',dificil:'Difícil'}[p.diff]}</span>`;
-    if(currentIdx+1<PUZZLES.length) document.getElementById('nextBtn').style.display='inline-block';
+    const pos=visibleIndices.indexOf(currentIdx);
+    if(pos>-1 && pos+1<visibleIndices.length) document.getElementById('nextBtn').style.display='inline-block';
   } else {
     msg.textContent='❌ Hay errores. Las celdas en rojo no están bien.';
     msg.className='fail';
@@ -306,9 +333,20 @@ document.getElementById('modeBtn').addEventListener('click',()=>{
 document.getElementById('checkBtn').addEventListener('click',checkSolution);
 document.getElementById('hintBtn').addEventListener('click',showHint);
 document.getElementById('resetBtn').addEventListener('click',resetGrid);
-document.getElementById('nextBtn').addEventListener('click',()=>loadPuzzle(currentIdx+1));
-document.getElementById('prevBtn').addEventListener('click',()=>{ if(currentIdx>0) loadPuzzle(currentIdx-1); });
-document.getElementById('nextNavBtn').addEventListener('click',()=>{ if(currentIdx<PUZZLES.length-1) loadPuzzle(currentIdx+1); });
+document.getElementById('nextBtn').addEventListener('click',()=>{
+  const pos=visibleIndices.indexOf(currentIdx);
+  if(pos>-1 && pos+1<visibleIndices.length) loadPuzzle(visibleIndices[pos+1]);
+});
+document.getElementById('prevBtn').addEventListener('click',()=>{
+  const pos=visibleIndices.indexOf(currentIdx);
+  if(pos>0) loadPuzzle(visibleIndices[pos-1]);
+});
+document.getElementById('nextNavBtn').addEventListener('click',()=>{
+  const pos=visibleIndices.indexOf(currentIdx);
+  if(pos>-1 && pos+1<visibleIndices.length) loadPuzzle(visibleIndices[pos+1]);
+});
+document.getElementById('puzzleSelect').addEventListener('change',e=>loadPuzzle(+e.target.value));
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setDiff(t.dataset.diff)));
 
 buildSelect();
 loadPuzzle(0);
